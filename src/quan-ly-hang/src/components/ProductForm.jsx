@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, Form, Input, InputNumber, Select } from 'antd';
 
-const ProductForm = ({ visible, onCancel, onSubmit, product, loading }) => {
+const ProductForm = ({ visible, onCancel, onSubmit, product, loading, categories }) => {
   const [form] = Form.useForm();
 
   // Reset form khi modal đóng
@@ -64,13 +64,7 @@ const ProductForm = ({ visible, onCancel, onSubmit, product, loading }) => {
         >
           <Select
             placeholder="Chọn danh mục"
-            options={[
-              { label: 'Sữa & Các sản phẩm từ sữa', value: 'Sữa & Các sản phẩm từ sữa' },
-              { label: 'Mẹ & Bé', value: 'Mẹ & Bé' },
-              { label: 'Thực phẩm', value: 'Thực phẩm' },
-              { label: 'Sữa', value: 'Sữa' },
-              { label: 'Thời trang', value: 'Thời trang' },
-            ]}
+            options={categories.map((category) => ({ label: category, value: category }))}
           />
         </Form.Item>
 

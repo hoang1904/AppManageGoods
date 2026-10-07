@@ -60,24 +60,6 @@ const ProductTable = ({ products, onEdit, onDelete, onAddNew, loading }) => {
       render: (quantity) => quantity.toLocaleString('vi-VN'),
     },
     {
-      title: 'Giá mua',
-      dataIndex: 'buyPrice',
-      key: 'buyPrice',
-      width: 120,
-      align: 'right',
-      sorter: (a, b) => a.buyPrice - b.buyPrice,
-      render: (price) => price.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' }),
-    },
-    {
-      title: 'Giá bán',
-      dataIndex: 'sellPrice',
-      key: 'sellPrice',
-      width: 100,
-      align: 'right',
-      sorter: (a, b) => a.sellPrice - b.sellPrice,
-      render: (price) => price.toLocaleString('vi-VN'),
-    },
-    {
       title: 'Đơn vị',
       dataIndex: 'unit',
       key: 'unit',
@@ -170,7 +152,7 @@ const ProductTable = ({ products, onEdit, onDelete, onAddNew, loading }) => {
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `Tổng ${total} sản phẩm` }}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1050 }}
       />
     </div>
   );

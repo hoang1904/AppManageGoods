@@ -9,72 +9,78 @@ import {
   ShoppingOutlined,
   DashboardOutlined,
   TagsOutlined,
-  BarcodeOutlined,
   SettingOutlined,
   LogoutOutlined,
 } from '@ant-design/icons';
 import ProductTable from './components/ProductTable';
 import ProductForm from './components/ProductForm';
+import CategoryManager from './components/CategoryManager';
+import PricingTable from './components/PricingTable';
+import InventoryManagement from './components/InventoryManagement';
+import Dashboard from './components/Dashboard';
+import { mockProducts } from './data/mockData';
+import { applyInventoryMovement } from './data/inventoryUtils';
 import './App.css';
 
 const { Header, Sider, Content } = Layout;
+const PRODUCTS_STORAGE_KEY = 'quan-ly-hang-products';
+const CATEGORIES_STORAGE_KEY = 'quan-ly-hang-categories';
+const INVENTORY_HISTORY_STORAGE_KEY = 'quan-ly-hang-inventory-history';
 
 function App() {
   const [collapsed, setCollapsed] = React.useState(false);
   const [currentPage, setCurrentPage] = React.useState('products');
   const [products, setProducts] = React.useState([]);
+  const [categories, setCategories] = React.useState([]);
+  const [inventoryHistory, setInventoryHistory] = React.useState([]);
   const [modalVisible, setModalVisible] = React.useState(false);
   const [selectedProduct, setSelectedProduct] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState(null);
-
-  const apiBase = '/api/products';
-
-  const normalizeProduct = (product) => ({
-    ...product,
-    id: product._id ? String(product._id) : product.id,
-  });
-
-  const fetchProducts = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch(apiBase);
-      if (!response.ok) {
-        throw new Error('Không thể tải dữ liệu sản phẩm từ server');
-      }
-      const data = await response.json();
-      setProducts(data.map(normalizeProduct));
-    } catch (err) {
-      console.error(err);
-      setError(err.message || 'Lỗi khi tải dữ liệu');
-      message.error(err.message || 'Lỗi khi kết nối tới backend');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   React.useEffect(() => {
-    fetchProducts();
+    try {
+      const storedProducts = localStorage.getItem(PRODUCTS_STORAGE_KEY);
+      const initialProducts = storedProducts ? JSON.parse(storedProducts) : mockProducts;
+      setProducts(initialProducts);
+      const storedCategories = localStorage.getItem(CATEGORIES_STORAGE_KEY);
+      const initialCategories = storedCategories
+        ? JSON.parse(storedCategories)
+        : [...new Set([...initialProducts.map((product) => product.category), ...mockProducts.map((product) => product.category)])].filter(Boolean).sort();
+      setCategories(initialCategories);
+      const storedHistory = localStorage.getItem(INVENTORY_HISTORY_STORAGE_KEY);
+      setInventoryHistory(storedHistory ? JSON.parse(storedHistory) : []);
+      if (!storedProducts) {
+        localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(mockProducts));
+      }
+      if (!storedCategories) {
+        localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(initialCategories));
+      }
+      if (!storedHistory) {
+        localStorage.setItem(INVENTORY_HISTORY_STORAGE_KEY, JSON.stringify([]));
+      }
+    } catch (err) {
+      console.error(err);
+      setProducts(mockProducts);
+      message.error('Không thể đọc dữ liệu sản phẩm đã lưu.');
+    }
   }, []);
 
   const sanitizePayload = (values) => {
-    const { id, _id, ...payload } = values;
+    const payload = { ...values };
+    delete payload.id;
+    delete payload._id;
     return payload;
   };
 
   const handleAddProduct = async (values) => {
     setLoading(true);
     try {
-      const response = await fetch(apiBase, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sanitizePayload(values)),
-      });
-      if (!response.ok) {
-        throw new Error('Không thể thêm sản phẩm');
-      }
-      await fetchProducts();
+      const nextProducts = [
+        ...products,
+        { ...sanitizePayload(values), id: crypto.randomUUID() },
+      ];
+      localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(nextProducts));
+      setProducts(nextProducts);
       message.success('Thêm sản phẩm thành công!');
       setModalVisible(false);
       setSelectedProduct(null);
@@ -89,15 +95,13 @@ function App() {
   const handleUpdateProduct = async (values) => {
     setLoading(true);
     try {
-      const response = await fetch(`${apiBase}/${values.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(sanitizePayload(values)),
-      });
-      if (!response.ok) {
-        throw new Error('Không thể cập nhật sản phẩm');
-      }
-      await fetchProducts();
+      const nextProducts = products.map((product) =>
+        String(product.id) === String(values.id)
+          ? { ...product, ...sanitizePayload(values), id: product.id }
+          : product
+      );
+      localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(nextProducts));
+      setProducts(nextProducts);
       message.success('Cập nhật sản phẩm thành công!');
       setModalVisible(false);
       setSelectedProduct(null);
@@ -112,13 +116,9 @@ function App() {
   const handleDeleteProduct = async (id) => {
     setLoading(true);
     try {
-      const response = await fetch(`${apiBase}/${id}`, {
-        method: 'DELETE',
-      });
-      if (!response.ok) {
-        throw new Error('Không thể xóa sản phẩm');
-      }
-      setProducts(products.filter((p) => p.id !== id));
+      const nextProducts = products.filter((product) => String(product.id) !== String(id));
+      localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(nextProducts));
+      setProducts(nextProducts);
       message.success('Xóa sản phẩm thành công!');
     } catch (err) {
       console.error(err);
@@ -126,6 +126,38 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const persistCategories = (nextCategories) => {
+    localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(nextCategories));
+    setCategories(nextCategories);
+  };
+
+  const handleRenameCategory = (oldName, newName) => {
+    const normalizedName = newName.trim();
+    const nextCategories = categories.map((category) => category === oldName ? normalizedName : category);
+    const nextProducts = products.map((product) =>
+      product.category === oldName ? { ...product, category: normalizedName } : product
+    );
+    try {
+      localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(nextCategories));
+      localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(nextProducts));
+      setCategories(nextCategories);
+      setProducts(nextProducts);
+      message.success('Đã cập nhật danh mục.');
+    } catch (err) {
+      console.error(err);
+      message.error('Không thể lưu thay đổi danh mục.');
+    }
+  };
+
+  const handleDeleteCategory = (categoryName) => {
+    if (products.some((product) => product.category === categoryName)) {
+      message.warning('Danh mục đang có sản phẩm, hãy chuyển sản phẩm sang danh mục khác trước.');
+      return;
+    }
+    persistCategories(categories.filter((category) => category !== categoryName));
+    message.success('Đã xóa danh mục.');
   };
 
   const handleEditProduct = (product) => {
@@ -168,14 +200,14 @@ function App() {
       ],
     },
     {
-      key: 'inventory',
-      icon: <BarcodeOutlined />,
-      label: 'Kho hàng',
-    },
-    {
-      key: 'tags',
+      key: 'pricing',
       icon: <TagsOutlined />,
       label: 'Giá bán',
+    },
+    {
+      key: 'inventory',
+      icon: <ShoppingOutlined />,
+      label: 'Tồn kho',
     },
     {
       type: 'divider',
@@ -221,11 +253,17 @@ function App() {
           onClick={(e) => {
             if (e.key === 'all-products') {
               setCurrentPage('products');
+            } else if (e.key === 'categories') {
+              setCurrentPage('categories');
+            } else if (e.key === 'pricing') {
+              setCurrentPage('pricing');
+            } else if (e.key === 'inventory') {
+              setCurrentPage('inventory');
             } else if (e.key === 'dashboard') {
               setCurrentPage('dashboard');
             }
           }}
-          defaultSelectedKeys={['all-products']}
+          selectedKeys={[currentPage === 'products' ? 'all-products' : currentPage]}
           defaultOpenKeys={['products']}
         />
       </Sider>
@@ -262,15 +300,19 @@ function App() {
         >
           {/* Breadcrumb */}
           <Breadcrumb
-            items={
-              currentPage === 'products'
-                ? [
-                    { title: 'Trang chủ' },
-                    { title: 'Quản lý hàng' },
-                    { title: 'Danh sách hàng hóa' },
-                  ]
-                : [{ title: 'Trang chủ' }, { title: 'Tổng quan' }]
-            }
+            items={[
+              { title: 'Trang chủ' },
+              ...(currentPage === 'products' || currentPage === 'categories'
+                ? [{ title: 'Quản lý hàng' }]
+                : []),
+              { title: {
+                products: 'Tất cả hàng hóa',
+                categories: 'Danh mục',
+                pricing: 'Giá bán',
+                inventory: 'Tồn kho',
+                dashboard: 'Tổng quan',
+              }[currentPage] || 'Trang chủ' },
+            ]}
             style={{ marginBottom: '24px' }}
           />
 
@@ -285,11 +327,50 @@ function App() {
             />
           )}
 
+          {currentPage === 'categories' && (
+            <CategoryManager
+              categories={categories}
+              products={products}
+              onAdd={(category) => persistCategories([...categories, category].sort((a, b) => a.localeCompare(b, 'vi')))}
+              onRename={handleRenameCategory}
+              onDelete={handleDeleteCategory}
+            />
+          )}
+
+          {currentPage === 'pricing' && (
+            <PricingTable products={products} onEdit={handleEditProduct} />
+          )}
+
+          {currentPage === 'inventory' && (
+            <InventoryManagement
+              products={products}
+              inventoryHistory={inventoryHistory}
+              onMovement={(movement) => {
+                try {
+                  const result = applyInventoryMovement(products, movement);
+                  localStorage.setItem(PRODUCTS_STORAGE_KEY, JSON.stringify(result.products));
+                  localStorage.setItem(INVENTORY_HISTORY_STORAGE_KEY, JSON.stringify([
+                    {
+                      ...result.history[0],
+                      productName: products.find((product) => Number(product.id) === Number(movement.productId))?.name,
+                    },
+                    ...inventoryHistory,
+                  ]));
+                  setProducts(result.products);
+                  setInventoryHistory((currentHistory) => [{
+                    ...result.history[0],
+                    productName: products.find((product) => Number(product.id) === Number(movement.productId))?.name,
+                  }, ...currentHistory]);
+                  message.success(movement.type === 'in' ? 'Nhập hàng thành công.' : 'Xuất hàng thành công.');
+                } catch (error) {
+                  message.error(error.message || 'Không thể ghi nhận giao dịch.');
+                }
+              }}
+            />
+          )}
+
           {currentPage === 'dashboard' && (
-            <div style={{ textAlign: 'center', padding: '48px' }}>
-              <h2>Tổng quan hệ thống</h2>
-              <p>Tính năng này sẽ được phát triển tiếp...</p>
-            </div>
+            <Dashboard products={products} inventoryHistory={inventoryHistory} />
           )}
         </Content>
       </Layout>
@@ -298,6 +379,7 @@ function App() {
       <ProductForm
         visible={modalVisible}
         product={selectedProduct}
+        categories={categories}
         onCancel={() => {
           setModalVisible(false);
           setSelectedProduct(null);
