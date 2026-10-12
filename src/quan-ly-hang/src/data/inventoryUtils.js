@@ -1,5 +1,19 @@
 export const LOW_STOCK_THRESHOLD = 10;
 
+export const getProductStatus = (product = {}) => {
+  const quantity = Number(product.quantity || 0);
+
+  if (quantity <= 0) {
+    return 'out';
+  }
+
+  if (quantity <= LOW_STOCK_THRESHOLD) {
+    return 'low';
+  }
+
+  return 'in';
+};
+
 export const getInventorySummary = (products = []) => {
   const totalProducts = products.length;
   const totalQuantity = products.reduce((sum, product) => sum + Number(product.quantity || 0), 0);

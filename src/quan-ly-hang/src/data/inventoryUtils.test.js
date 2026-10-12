@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   applyInventoryMovement,
   getInventorySummary,
+  getProductStatus,
 } from './inventoryUtils.js';
 
 test('applyInventoryMovement increases stock for incoming products', () => {
@@ -46,4 +47,10 @@ test('getInventorySummary calculates stock and inventory value', () => {
     lowStockProducts: 3,
     totalValue: 2000,
   });
+});
+
+test('getProductStatus classifies stock correctly', () => {
+  assert.equal(getProductStatus({ quantity: 0 }), 'out');
+  assert.equal(getProductStatus({ quantity: 5 }), 'low');
+  assert.equal(getProductStatus({ quantity: 15 }), 'in');
 });

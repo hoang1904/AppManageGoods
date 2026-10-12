@@ -1,6 +1,6 @@
 import React from 'react';
-import { Alert, Button, DatePicker, Form, Input, InputNumber, Modal, Select, Space, Table, Tag } from 'antd';
-import { ArrowDownOutlined, ArrowUpOutlined, HistoryOutlined, PlusOutlined } from '@ant-design/icons';
+import { Alert, Button, DatePicker, Form, Input, InputNumber, Modal, Select, Table, Tag } from 'antd';
+import { ArrowDownOutlined, ArrowUpOutlined, PlusOutlined } from '@ant-design/icons';
 import { getInventorySummary } from '../data/inventoryUtils';
 
 const formatVnd = (amount) => Number(amount || 0).toLocaleString('vi-VN', {
