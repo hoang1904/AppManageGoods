@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "server": "node server/index.js",
+    "seed": "node server/seed.js",
     "dev:all": "concurrently \"npm run server\" \"npm run dev\"",
     "build": "vite build",
     "lint": "eslint .",
@@ -13,12 +14,14 @@
   },
   "dependencies": {
     "antd": "^6.3.5",
+    "bcryptjs": "^3.0.3",
     "concurrently": "^10.0.6",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.3.0",
     "jsonwebtoken": "^9.0.3",
     "mongodb": "^7.5.0",
+    "mongoose": "^9.11.2",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "save-dev": "^0.0.1-security",

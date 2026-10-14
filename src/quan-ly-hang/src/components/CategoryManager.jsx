@@ -37,7 +37,6 @@ const CategoryManager = ({ categories, products, onAdd, onRename, onDelete }) =>
       if (normalizedName !== editingCategory) onRename(editingCategory, normalizedName);
     } else {
       onAdd(normalizedName);
-      message.success('Đã thêm danh mục.');
     }
     setModalOpen(false);
   };

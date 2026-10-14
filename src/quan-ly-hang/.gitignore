@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Môi trường & bí mật - KHÔNG commit
+.env
+.env.production
+
+# Dữ liệu server - KHÔNG commit dữ liệu thật lên git
+server/data/
