@@ -9,6 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { connectDB } from './db.js';
 import { Product } from './models/Product.js';
 import { InventoryHistory } from './models/InventoryHistory.js';
+import { User } from './models/User.js';
+import { Order } from './models/Order.js';
 import { applyInventoryMovement } from '../src/data/inventoryUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -72,21 +74,21 @@ setInterval(() => {
   }
 }, 30 * 60 * 1000);
 
-// ─── Tài khoản hệ thống (hash bằng bcrypt) ────────────────────────────────
-const systemUsers = [
+// ─── Tài khoản mặc định hệ thống (hash bằng bcrypt) ───────────────────────
+const defaultUsers = [
   {
-    id: 'u-admin',
     username: 'admin',
     passwordHash: bcrypt.hashSync('admin123', 12),
     role: 'admin',
     name: 'Quản trị viên',
+    isActive: true,
   },
   {
-    id: 'u-staff',
     username: 'staff',
     passwordHash: bcrypt.hashSync('staff123', 12),
     role: 'staff',
     name: 'Nhân viên kho',
+    isActive: true,
   },
 ];
 
@@ -124,13 +126,27 @@ let isMongoConnected = false;
 const readLocalData = () => {
   try {
     if (!fs.existsSync(DATA_FILE)) {
-      return { products: [], categories: [], inventoryHistory: [] };
+      const initial = {
+        products: [],
+        categories: [],
+        inventoryHistory: [],
+        orders: [],
+        users: defaultUsers.map((u, i) => ({ ...u, id: `u-${i + 1}` })),
+      };
+      writeLocalData(initial);
+      return initial;
     }
     const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-    return JSON.parse(raw);
+    const data = JSON.parse(raw);
+    if (!data.users || data.users.length === 0) {
+      data.users = defaultUsers.map((u, i) => ({ ...u, id: `u-${i + 1}` }));
+      writeLocalData(data);
+    }
+    if (!data.orders) data.orders = [];
+    return data;
   } catch (err) {
     console.error('[Storage] Lỗi đọc app-data.json:', err.message);
-    return { products: [], categories: [], inventoryHistory: [] };
+    return { products: [], categories: [], inventoryHistory: [], orders: [], users: [] };
   }
 };
 
@@ -154,7 +170,7 @@ app.get('/api/health', (_, res) => res.json({
 }));
 
 // Đăng nhập
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   const ip = req.ip || req.socket?.remoteAddress || 'unknown';
   if (!checkRateLimit(ip)) {
     return res.status(429).json({ message: 'Quá nhiều lần thử đăng nhập. Vui lòng đợi 15 phút.' });
@@ -165,21 +181,78 @@ app.post('/api/auth/login', (req, res) => {
     return res.status(400).json({ message: 'Vui lòng nhập tên đăng nhập và mật khẩu.' });
   }
 
-  const user = systemUsers.find((u) => u.username === username);
-  if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
-    return res.status(401).json({ message: 'Sai tài khoản hoặc mật khẩu.' });
+  try {
+    let user = null;
+    const cleanUsername = String(username).toLowerCase().trim();
+
+    if (isMongoConnected) {
+      user = await User.findOne({ username: cleanUsername, isActive: true });
+    } else {
+      const data = readLocalData();
+      user = (data.users || []).find(
+        (u) => u.username.toLowerCase() === cleanUsername && u.isActive !== false,
+      );
+    }
+
+    if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
+      return res.status(401).json({ message: 'Sai tài khoản hoặc mật khẩu.' });
+    }
+
+    const userId = user._id ? user._id.toString() : (user.id || user.username);
+    const token = jwt.sign(
+      { id: userId, username: user.username, role: user.role, name: user.name },
+      JWT_SECRET,
+      { expiresIn: '8h' },
+    );
+
+    return res.json({
+      token,
+      user: { id: userId, username: user.username, role: user.role, name: user.name },
+    });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || 'Lỗi khi đăng nhập.' });
   }
+});
 
-  const token = jwt.sign(
-    { id: user.id, username: user.username, role: user.role, name: user.name },
-    JWT_SECRET,
-    { expiresIn: '8h' },
-  );
+// Đổi mật khẩu
+app.post('/api/auth/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body || {};
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Vui lòng nhập mật khẩu hiện tại và mật khẩu mới.' });
+    }
+    if (String(newPassword).length < 6) {
+      return res.status(400).json({ message: 'Mật khẩu mới phải có ít nhất 6 ký tự.' });
+    }
 
-  return res.json({
-    token,
-    user: { id: user.id, username: user.username, role: user.role, name: user.name },
-  });
+    if (isMongoConnected) {
+      const user = await User.findById(req.user.id);
+      if (!user) return res.status(404).json({ message: 'Không tìm thấy tài khoản.' });
+      if (!bcrypt.compareSync(currentPassword, user.passwordHash)) {
+        return res.status(400).json({ message: 'Mật khẩu hiện tại không chính xác.' });
+      }
+      user.passwordHash = bcrypt.hashSync(newPassword, 12);
+      await user.save();
+      return res.json({ message: 'Đổi mật khẩu thành công!' });
+    }
+
+    const data = readLocalData();
+    const userIndex = (data.users || []).findIndex(
+      (u) => (u.id && u.id === req.user.id) || u.username === req.user.username,
+    );
+    if (userIndex === -1) {
+      return res.status(404).json({ message: 'Không tìm thấy tài khoản.' });
+    }
+    const user = data.users[userIndex];
+    if (!bcrypt.compareSync(currentPassword, user.passwordHash)) {
+      return res.status(400).json({ message: 'Mật khẩu hiện tại không chính xác.' });
+    }
+    data.users[userIndex].passwordHash = bcrypt.hashSync(newPassword, 12);
+    writeLocalData(data);
+    return res.json({ message: 'Đổi mật khẩu thành công!' });
+  } catch (err) {
+    return res.status(500).json({ message: err.message || 'Không thể đổi mật khẩu.' });
+  }
 });
 
 // ─── Sản phẩm ─────────────────────────────────────────────────────────────
@@ -540,6 +613,198 @@ app.post('/api/inventory', authMiddleware, async (req, res) => {
   }
 });
 
+// ─── Đơn hàng / Bán hàng xuất kho nhiều món ───────────────────────────────
+
+app.get('/api/orders', authMiddleware, async (req, res) => {
+  try {
+    if (isMongoConnected) {
+      const orders = await Order.find().sort({ createdAt: -1 }).limit(100);
+      return res.json(orders);
+    }
+    const data = readLocalData();
+    return res.json(data.orders || []);
+  } catch {
+    return res.status(500).json({ message: 'Không thể tải danh sách đơn hàng.' });
+  }
+});
+
+app.post('/api/orders', authMiddleware, async (req, res) => {
+  const { customerName, customerPhone, items, notes } = req.body || {};
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ message: 'Đơn hàng phải có ít nhất 1 sản phẩm.' });
+  }
+
+  for (const item of items) {
+    const qty = Number(item.quantity);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return res.status(400).json({ message: `Số lượng cho "${item.productName || item.productId}" phải lớn hơn 0.` });
+    }
+  }
+
+  const orderCode = `HD${Date.now().toString().slice(-7)}`;
+  const performedBy = req.user?.name || req.user?.username || '';
+
+  // Chế độ MongoDB: ACID Transaction
+  if (isMongoConnected) {
+    const session = await Product.startSession();
+    try {
+      let createdOrder;
+      await session.withTransaction(async () => {
+        const orderItems = [];
+        let totalQuantity = 0;
+        let totalAmount = 0;
+
+        for (const item of items) {
+          const product = await Product.findById(item.productId).session(session);
+          if (!product) {
+            throw Object.assign(new Error(`Sản phẩm "${item.productName || item.productId}" không tồn tại.`), { status: 404 });
+          }
+
+          const qty = Number(item.quantity);
+          if (product.quantity < qty) {
+            throw Object.assign(
+              new Error(`"${product.name}" chỉ còn ${product.quantity} ${product.unit || 'cái'} trong kho, không đủ bán ${qty}.`),
+              { status: 400 },
+            );
+          }
+
+          const unitPrice = Number(item.unitPrice ?? product.sellPrice ?? 0);
+          const subtotal = qty * unitPrice;
+          totalQuantity += qty;
+          totalAmount += subtotal;
+
+          // Trừ kho
+          product.quantity -= qty;
+          await product.save({ session });
+
+          orderItems.push({
+            productId: String(product._id),
+            productCode: product.code || '',
+            productName: product.name,
+            quantity: qty,
+            unit: product.unit || 'cái',
+            unitPrice,
+            subtotal,
+          });
+
+          // Ghi nhận lịch sử kho
+          await InventoryHistory.create(
+            [{
+              productId: String(product._id),
+              productName: product.name,
+              type: 'out',
+              quantity: qty,
+              quantityDelta: -qty,
+              notes: `Bán hàng đơn ${orderCode}${customerName ? ' - ' + customerName : ''}`,
+              performedBy,
+            }],
+            { session },
+          );
+        }
+
+        const [order] = await Order.create(
+          [{
+            orderCode,
+            customerName: customerName || 'Khách lẻ',
+            customerPhone: customerPhone || '',
+            items: orderItems,
+            totalQuantity,
+            totalAmount,
+            notes: notes || '',
+            performedBy,
+          }],
+          { session },
+        );
+        createdOrder = order;
+      });
+
+      const [products, history] = await Promise.all([
+        Product.find().sort({ code: 1 }),
+        InventoryHistory.find().sort({ createdAt: -1 }).limit(200),
+      ]);
+
+      return res.status(201).json({ order: createdOrder, products, history });
+    } catch (err) {
+      return res.status(err.status || 500).json({ message: err.message || 'Không thể tạo đơn hàng.' });
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  // Chế độ Local JSON
+  try {
+    const data = readLocalData();
+    const products = data.products || [];
+    const orderItems = [];
+    let totalQuantity = 0;
+    let totalAmount = 0;
+
+    for (const item of items) {
+      const product = products.find((p) => String(p.id) === String(item.productId));
+      if (!product) {
+        return res.status(404).json({ message: `Sản phẩm "${item.productName || item.productId}" không tồn tại.` });
+      }
+      const qty = Number(item.quantity);
+      if (product.quantity < qty) {
+        return res.status(400).json({
+          message: `"${product.name}" chỉ còn ${product.quantity} ${product.unit || 'cái'} trong kho, không đủ bán ${qty}.`,
+        });
+      }
+
+      const unitPrice = Number(item.unitPrice ?? product.sellPrice ?? 0);
+      const subtotal = qty * unitPrice;
+      totalQuantity += qty;
+      totalAmount += subtotal;
+
+      // Trừ kho
+      product.quantity -= qty;
+
+      orderItems.push({
+        productId: String(product.id),
+        productCode: product.code || '',
+        productName: product.name,
+        quantity: qty,
+        unit: product.unit || 'cái',
+        unitPrice,
+        subtotal,
+      });
+
+      const histItem = {
+        id: `h-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        productId: String(product.id),
+        productName: product.name,
+        type: 'out',
+        quantity: qty,
+        quantityDelta: -qty,
+        notes: `Bán hàng đơn ${orderCode}${customerName ? ' - ' + customerName : ''}`,
+        performedBy,
+        createdAt: new Date().toISOString(),
+      };
+      data.inventoryHistory = [histItem, ...(data.inventoryHistory || [])].slice(0, 200);
+    }
+
+    const newOrder = {
+      id: `ord-${Date.now()}`,
+      orderCode,
+      customerName: customerName || 'Khách lẻ',
+      customerPhone: customerPhone || '',
+      items: orderItems,
+      totalQuantity,
+      totalAmount,
+      notes: notes || '',
+      performedBy,
+      createdAt: new Date().toISOString(),
+    };
+
+    data.orders = [newOrder, ...(data.orders || [])].slice(0, 200);
+    writeLocalData(data);
+
+    return res.status(201).json({ order: newOrder, products: data.products, history: data.inventoryHistory });
+  } catch (err) {
+    return res.status(400).json({ message: err.message || 'Không thể tạo đơn hàng.' });
+  }
+});
+
 // ─── Xử lý lỗi toàn cục ───────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error('[Server Error]', err.message);
@@ -547,8 +812,20 @@ app.use((err, _req, res, _next) => {
 });
 
 // ─── Khởi động Server ─────────────────────────────────────────────────────
-connectDB().then((connected) => {
+connectDB().then(async (connected) => {
   isMongoConnected = connected;
+  if (isMongoConnected) {
+    try {
+      const userCount = await User.countDocuments();
+      if (userCount === 0) {
+        await User.insertMany(defaultUsers);
+        console.log('👤 [MongoDB] Đã khởi tạo 2 tài khoản mặc định (admin / staff).');
+      }
+    } catch (e) {
+      console.warn('⚠️ [MongoDB] Không thể kiểm tra tài khoản ban đầu:', e.message);
+    }
+  }
+
   app.listen(port, () => {
     console.log(`\n=============================================================`);
     console.log(`🚀 API Inventory Backend đang chạy tại http://localhost:${port}`);

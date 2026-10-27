@@ -7,6 +7,8 @@ import {
   TagsOutlined,
   LogoutOutlined,
   InboxOutlined,
+  FileTextOutlined,
+  KeyOutlined,
 } from '@ant-design/icons';
 import ProductTable from './components/ProductTable';
 import ProductForm from './components/ProductForm';
@@ -15,6 +17,8 @@ import PricingTable from './components/PricingTable';
 import InventoryManagement from './components/InventoryManagement';
 import Dashboard from './components/Dashboard';
 import LoginPage from './components/LoginPage';
+import OrderManagement from './components/OrderManagement';
+import ChangePasswordModal from './components/ChangePasswordModal';
 import { api } from './services/api';
 import './App.css';
 
@@ -44,6 +48,7 @@ function App() {
   const [dataLoading, setDataLoading] = React.useState(false);
 
   const [sessionUser, setSessionUser] = React.useState(getStoredUser);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = React.useState(false);
   const fileInputRef = React.useRef(null);
 
   const isAdmin = sessionUser?.role === 'admin';
@@ -309,6 +314,7 @@ function App() {
   // ── Menu ───────────────────────────────────────────────────────────────
   const menuItems = [
     { key: 'dashboard', icon: <DashboardOutlined />, label: 'Tổng quan' },
+    { key: 'orders', icon: <FileTextOutlined />, label: 'Bán hàng / Đơn hàng' },
     {
       key: 'products',
       icon: <ShoppingOutlined />,
@@ -340,6 +346,7 @@ function App() {
           onClick={(e) => {
             if (e.key === 'all-products') setCurrentPage('products');
             else if (e.key === 'categories') setCurrentPage('categories');
+            else if (e.key === 'orders') setCurrentPage('orders');
             else if (e.key === 'pricing') setCurrentPage('pricing');
             else if (e.key === 'inventory') setCurrentPage('inventory');
             else if (e.key === 'dashboard') setCurrentPage('dashboard');
@@ -362,15 +369,32 @@ function App() {
           }}
         >
           <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#333' }}>Hệ thống quản lý kho hàng</div>
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
             <span>👤 {sessionUser.name || sessionUser.username}</span>
             <span style={{ fontSize: 12, color: '#888', background: '#f0f0f0', padding: '2px 8px', borderRadius: 10 }}>
               {isAdmin ? 'Admin' : 'Nhân viên'}
             </span>
             <button
               type="button"
+              onClick={() => setIsChangePasswordOpen(true)}
+              style={{
+                padding: '6px 12px',
+                border: '1px solid #d9d9d9',
+                background: '#fff',
+                borderRadius: 6,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+                fontSize: 13,
+              }}
+            >
+              <KeyOutlined /> Đổi mật khẩu
+            </button>
+            <button
+              type="button"
               onClick={handleLogout}
-              style={{ padding: '6px 12px', border: '1px solid #d9d9d9', background: '#fff', borderRadius: 6, cursor: 'pointer' }}
+              style={{ padding: '6px 12px', border: '1px solid #d9d9d9', background: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
             >
               Đăng xuất
             </button>
@@ -384,11 +408,12 @@ function App() {
               ...(currentPage === 'products' || currentPage === 'categories' ? [{ title: 'Quản lý hàng' }] : []),
               {
                 title: {
+                  dashboard: 'Tổng quan',
+                  orders: 'Bán hàng / Đơn hàng',
                   products: 'Tất cả hàng hóa',
                   categories: 'Danh mục',
                   pricing: 'Giá bán',
                   inventory: 'Tồn kho',
-                  dashboard: 'Tổng quan',
                 }[currentPage] || 'Trang chủ',
               },
             ]}
@@ -422,6 +447,16 @@ function App() {
             />
           )}
 
+          {currentPage === 'orders' && (
+            <OrderManagement
+              products={products}
+              onOrderCompleted={(res) => {
+                if (res?.products) setProducts(res.products);
+                if (res?.history) setInventoryHistory(res.history);
+              }}
+            />
+          )}
+
           {currentPage === 'pricing' && (
             <PricingTable products={products} onEdit={handleEditProduct} />
           )}
@@ -448,6 +483,11 @@ function App() {
         }}
         onSubmit={handleFormSubmit}
         loading={loading}
+      />
+
+      <ChangePasswordModal
+        open={isChangePasswordOpen}
+        onCancel={() => setIsChangePasswordOpen(false)}
       />
     </Layout>
   );

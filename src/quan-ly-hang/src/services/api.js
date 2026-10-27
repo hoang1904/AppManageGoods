@@ -85,9 +85,22 @@ export const api = {
   deleteCategory: (name) =>
     request(`/categories/${encodeURIComponent(name)}`, { method: 'DELETE' }),
 
+  // ── Tài khoản & Bảo mật ──────────────────────────────────────────────────
+  changePassword: (currentPassword, newPassword) =>
+    request('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
   // ── Kho hàng ──────────────────────────────────────────────────────────────
   getInventory: () => request('/inventory'),
 
   recordMovement: (movement) =>
     request('/inventory', { method: 'POST', body: JSON.stringify(movement) }),
+
+  // ── Đơn hàng & Bán hàng ───────────────────────────────────────────────────
+  getOrders: () => request('/orders'),
+
+  createOrder: (orderData) =>
+    request('/orders', { method: 'POST', body: JSON.stringify(orderData) }),
 };
