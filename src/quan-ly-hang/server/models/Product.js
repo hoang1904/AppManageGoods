@@ -37,8 +37,7 @@ const productSchema = new mongoose.Schema(
   },
 );
 
-// Index để tìm kiếm theo mã (không phân biệt hoa thường) nhanh hơn
-productSchema.index({ code: 1 });
+// Index để tìm kiếm theo danh mục nhanh hơn
 productSchema.index({ category: 1 });
 
 export const Product = mongoose.model('Product', productSchema);
