@@ -1,6 +1,6 @@
 import React from 'react';
-import { Table, Space, Button, Popconfirm, Input, Select, Tag } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Table, Space, Button, Popconfirm, Input, Select, Tag, Image } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined, SearchOutlined, UploadOutlined, DownloadOutlined, PictureOutlined } from '@ant-design/icons';
 import { getProductStatus } from '../data/inventoryUtils';
 
 const ProductTable = ({ products, onEdit, onDelete, onAddNew, onExport, onImport, loading, canManage = false }) => {
@@ -30,9 +30,42 @@ const ProductTable = ({ products, onEdit, onDelete, onAddNew, onExport, onImport
     setFilteredProducts(filtered);
   }, [searchText, selectedCategory, selectedStatus, products]);
 
-  const categories = [...new Set(products.map((product) => product.category))];
+  const categories = [...new Set(products.map((product) => product.category))].filter(Boolean);
 
   const columns = [
+    {
+      title: 'Hình ảnh',
+      dataIndex: 'imageUrl',
+      key: 'imageUrl',
+      width: 75,
+      align: 'center',
+      render: (url) => (
+        url ? (
+          <Image
+            src={url}
+            alt="Ảnh SP"
+            width={42}
+            height={42}
+            style={{ objectFit: 'cover', borderRadius: 6, border: '1px solid #f0f0f0', display: 'block' }}
+          />
+        ) : (
+          <div style={{
+            width: 42,
+            height: 42,
+            borderRadius: 6,
+            background: '#f5f5f5',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#bfbfbf',
+            margin: '0 auto',
+            border: '1px dashed #d9d9d9',
+          }}>
+            <PictureOutlined style={{ fontSize: 18 }} />
+          </div>
+        )
+      ),
+    },
     {
       title: 'Mã sản phẩm',
       dataIndex: 'code',
@@ -52,7 +85,7 @@ const ProductTable = ({ products, onEdit, onDelete, onAddNew, onExport, onImport
       dataIndex: 'category',
       key: 'category',
       width: 150,
-      render: (text) => <Tag>{text}</Tag>,
+      render: (text) => text ? <Tag color="blue">{text}</Tag> : '-',
     },
     {
       title: 'Trạng thái',
@@ -89,9 +122,9 @@ const ProductTable = ({ products, onEdit, onDelete, onAddNew, onExport, onImport
       title: 'Ghi chú',
       dataIndex: 'notes',
       key: 'notes',
-      width: 120,
+      width: 140,
       render: (notes) => (
-        <span title={notes} style={{ maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span title={notes} style={{ maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block' }}>
           {notes || '-'}
         </span>
       ),
@@ -99,7 +132,7 @@ const ProductTable = ({ products, onEdit, onDelete, onAddNew, onExport, onImport
     {
       title: 'Hành động',
       key: 'action',
-      width: 120,
+      width: 110,
       align: 'center',
       fixed: 'right',
       render: (_, record) => (
@@ -107,10 +140,11 @@ const ProductTable = ({ products, onEdit, onDelete, onAddNew, onExport, onImport
           <Button type="primary" icon={<EditOutlined />} size="small" onClick={() => onEdit(record)} title="Sửa" />
           <Popconfirm
             title="Xóa sản phẩm"
-            description="Bạn chắc chắn muốn xóa sản phẩm này?"
+            description="Bạn chắc chắn muốn xóa sản phẩm này khỏi MongoDB?"
             onConfirm={() => onDelete(record.id)}
-            okText="Có"
-            cancelText="Không"
+            okText="Xóa"
+            cancelText="Hủy"
+            okButtonProps={{ danger: true }}
           >
             <Button danger icon={<DeleteOutlined />} size="small" title="Xóa" />
           </Popconfirm>
@@ -143,12 +177,12 @@ const ProductTable = ({ products, onEdit, onDelete, onAddNew, onExport, onImport
           prefix={<SearchOutlined />}
           value={searchText}
           onChange={(event) => setSearchText(event.target.value)}
-          style={{ width: '300px' }}
+          style={{ width: '280px' }}
         />
 
         <Select
           placeholder="Lọc theo danh mục"
-          style={{ width: '200px' }}
+          style={{ width: '180px' }}
           value={selectedCategory}
           onChange={setSelectedCategory}
           allowClear
@@ -160,7 +194,7 @@ const ProductTable = ({ products, onEdit, onDelete, onAddNew, onExport, onImport
 
         <Select
           placeholder="Trạng thái"
-          style={{ width: '160px' }}
+          style={{ width: '140px' }}
           value={selectedStatus}
           onChange={setSelectedStatus}
           allowClear
@@ -172,8 +206,8 @@ const ProductTable = ({ products, onEdit, onDelete, onAddNew, onExport, onImport
           ]}
         />
 
-        <span style={{ color: '#666' }}>
-          Tổng: {filteredProducts.length}/{products.length} sản phẩm
+        <span style={{ color: '#666', marginLeft: 'auto' }}>
+          Tổng: <b>{filteredProducts.length}/{products.length}</b> sản phẩm
         </span>
       </div>
 

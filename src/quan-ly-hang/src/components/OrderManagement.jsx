@@ -105,6 +105,7 @@ export default function OrderManagement({ products = [], onOrderCompleted }) {
           productName: product.name,
           unit: product.unit || 'cái',
           stock: product.quantity,
+          imageUrl: product.imageUrl || '',
           unitPrice: product.sellPrice || 0,
           quantity: 1,
           subtotal: product.sellPrice || 0,
@@ -223,12 +224,36 @@ export default function OrderManagement({ products = [], onOrderCompleted }) {
     {
       title: 'Mã / Tên sản phẩm',
       render: (_, record) => (
-        <div>
-          <Text strong>{record.productName}</Text>
-          <br />
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            Mã: {record.productCode} | Tồn: {record.stock} {record.unit}
-          </Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {record.imageUrl ? (
+            <img
+              src={record.imageUrl}
+              alt=""
+              style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 4, border: '1px solid #f0f0f0', flexShrink: 0 }}
+            />
+          ) : (
+            <div style={{
+              width: 36,
+              height: 36,
+              borderRadius: 4,
+              background: '#f5f5f5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#bfbfbf',
+              fontSize: 16,
+              flexShrink: 0,
+            }}>
+              📦
+            </div>
+          )}
+          <div>
+            <Text strong>{record.productName}</Text>
+            <br />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              Mã: {record.productCode} | Tồn: {record.stock} {record.unit}
+            </Text>
+          </div>
         </div>
       ),
     },

@@ -21,6 +21,7 @@ const productSchema = new mongoose.Schema(
     unit: { type: String, trim: true, default: 'cái' },
     buyPrice: { type: Number, default: 0, min: [0, 'Giá mua không được âm.'] },
     sellPrice: { type: Number, default: 0, min: [0, 'Giá bán không được âm.'] },
+    imageUrl: { type: String, default: '' },
     notes: { type: String, default: '' },
   },
   {
